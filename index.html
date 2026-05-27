@@ -2292,6 +2292,23 @@ const CONFIG = {
   JIKAN_API: 'https://api.jikan.moe/v4',
   PROXY_URL: 'https://kurodo-proxy.onrender.com',
   ANILIST_CLIENT_ID: '42167',
+
+/* ── Force HTTPS on proxy URLs to prevent mixed-content blocking ── */
+function forceHttps(url) {
+  if (typeof url !== "string") return url;
+  return url.replace(/^http:\/\/kurodo-proxy\.onrender\.com\//i, "https://kurodo-proxy.onrender.com/");
+}
+function forceHttpsDeep(obj) {
+  if (!obj) return obj;
+  if (typeof obj === "string") return forceHttps(obj);
+  if (Array.isArray(obj)) return obj.map(forceHttpsDeep);
+  if (typeof obj === "object") {
+    var out = {};
+    for (var k in obj) { if (obj.hasOwnProperty(k)) out[k] = forceHttpsDeep(obj[k]); }
+    return out;
+  }
+  return obj;
+}
 };
 
 const state = {
@@ -2706,7 +2723,7 @@ async function fetchStreamUrl(malId, episodeNumber, server, animeData, type) {
     });
     var data = await res.json().catch(function() { return null; });
     if (!res.ok) throw new Error((data && (data.error || data.message)) || ('Proxy ' + res.status));
-    return data;
+    return forceHttpsDeep(data);
   } catch (e) {
     console.error('Proxy stream lookup failed:', e);
     return null;
@@ -4223,7 +4240,7 @@ async function loadStream(malId, episodeNum, server) {
   playerState.chapters = Array.isArray(streamData.chapters) ? streamData.chapters : [];
   setupSubtitles(streamData.subtitles || streamData.tracks || [], streamData.referer);
 
-  var streamUrl = typeof streamData === 'string' ? streamData : (streamData.stream_url || streamData.url || '');
+  var streamUrl = forceHttps(typeof streamData === 'string' ? streamData : (streamData.stream_url || streamData.url || ''));
   if (!streamUrl) {
     loading.innerHTML = '<p style="color:var(--red);font-weight:800;">No stream URL returned by proxy.</p><div class="server-selector" id="serverSelector">' + serverButtonsHtml + '</div>';
     return;
@@ -10484,7 +10501,7 @@ video::cue, #playerVideo::cue {
       var base = (window.CONFIG && CONFIG.PROXY_URL) || 'https://kurodo-proxy.onrender.com';
       var p = base.replace(/\/$/, '') + '/hls?url=' + encodeURIComponent(url);
       if (referer) p += '&referer=' + encodeURIComponent(referer);
-      return p;
+      return forceHttps(p);
     } catch(e) { return url; }
   }
 
